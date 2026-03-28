@@ -5,6 +5,8 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from modules.emailer import generate_pdf_report, send_alert_email
+
 # SAFE IMPORTS
 try:
     from modules.scanner import run_nmap_scan, parse_nmap_xml, check_virustotal
@@ -155,13 +157,22 @@ if st.button("🚀 Run Scan"):
 
     st.success("Scan Complete")
 
-    # ── EMAIL FIXED ─────────────────────
-    if sender and password and receiver and send_alert_email:
-        sent = send_alert_email(sender, password, receiver, df, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        if sent:
+    # ── EMAIL SEND ─────────────────────
+    if sender and password and receiver:
+        sent = send_alert_email(
+            sender,
+            password,
+            receiver,
+            df,
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+
+        if sent == True:
             st.success("📧 Email sent successfully")
+        elif sent == False:
+            st.info("No critical/high alerts to send")
         else:
-            st.warning("No critical alerts or email failed")
+            st.error(f"❌ Email failed: {sent}")
 
 # ── DISPLAY ─────────────────────────
 df = st.session_state.df
@@ -187,7 +198,7 @@ if df is not None:
     # CSV
     st.download_button("📥 Download CSV", df.to_csv(index=False), "scan.csv")
 
-    # ── PDF FIXED ─────────────────────
+    # ── PDF ─────────────────────
     st.subheader("📄 Report")
 
     if st.button("Generate PDF Report"):

@@ -1,16 +1,20 @@
 # modules/emailer.py
 import os
+import smtplib
 from datetime import datetime
 import pandas as pd
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 
-REPORTS_DIR = 'reports'
+REPORTS_DIR = "reports"
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
 
+# ─────────────────────────────────────────────
+# 📄 PDF GENERATION
+# ─────────────────────────────────────────────
 def generate_pdf_report(df: pd.DataFrame, scan_time: str, output_path: str) -> str:
-    """
-    Simple PDF generator (stable version)
-    """
     from fpdf import FPDF
 
     pdf = FPDF()
@@ -44,3 +48,74 @@ def generate_pdf_report(df: pd.DataFrame, scan_time: str, output_path: str) -> s
 
     pdf.output(output_path)
     return output_path
+
+
+# ─────────────────────────────────────────────
+# 📧 EMAIL SENDER (FIXED)
+# ─────────────────────────────────────────────
+def send_alert_email(sender, password, receiver, df, scan_time):
+    """
+    Sends email with optional PDF attachment
+    """
+
+    try:
+        # ✅ Send report if there are any results
+        if len(df) == 0:
+            print("No scan results → email skipped")
+            return False
+
+        # ── Email content ──
+        msg = MIMEMultipart()
+        msg["Subject"] = f"📊 CyberScan Report ({len(df)} findings)"
+        msg["From"] = sender
+        msg["To"] = receiver
+
+        body = f"""
+CyberScan Report
+
+Scan Time: {scan_time}
+
+Total Hosts: {df['ip'].nunique()}
+Total Ports: {len(df)}
+
+Critical: {len(df[df['severity']=='Critical'])}
+High: {len(df[df['severity']=='High'])}
+Medium: {len(df[df['severity']=='Medium'])}
+
+Check attached report.
+"""
+
+        msg.attach(MIMEText(body, "plain"))
+
+        # ── Generate PDF ──
+        filename = f"report_{datetime.now().strftime('%H%M%S')}.pdf"
+        pdf_path = os.path.join(REPORTS_DIR, filename)
+
+        generate_pdf_report(df, scan_time, pdf_path)
+
+        # ── Attach PDF ──
+        with open(pdf_path, "rb") as f:
+            part = MIMEApplication(f.read(), _subtype="pdf")
+            part.add_header(
+                "Content-Disposition",
+                "attachment",
+                filename=filename
+            )
+            msg.attach(part)
+
+        # ── Send Email ──
+        print("Connecting to Gmail SMTP...")
+
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(sender, password)
+        server.sendmail(sender, receiver, msg.as_string())
+        server.quit()
+
+        print("EMAIL SENT SUCCESS")
+        return True
+
+    except Exception as e:
+        import traceback
+        print("EMAIL ERROR:", e)
+        print(traceback.format_exc())
+        return str(e)
