@@ -1,0 +1,8 @@
+
+streamlit
+pandas
+plotly
+fastapi
+uvicorn
+fpdf
+requests
