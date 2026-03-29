@@ -1,78 +1,37 @@
-# modules/database.py
 import sqlite3
-import pandas as pd
-from datetime import datetime
-
-DB_FILE = 'cyberscan.db'
-
 
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS scans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            scan_time TEXT,
-            targets TEXT,
-            total_hosts INTEGER,
-            total_ports INTEGER,
-            max_risk REAL,
-            avg_risk REAL,
-            results_json TEXT
-        )
-    ''')
+    conn = sqlite3.connect("cyberscan.db")
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS scans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scan_time TEXT,
+        total_hosts INTEGER,
+        total_ports INTEGER,
+        max_risk REAL
+    )
+    """)
     conn.commit()
     conn.close()
 
-
-def save_scan(df: pd.DataFrame, targets=None):
-    conn = sqlite3.connect(DB_FILE)
+def save_scan(df):
+    conn = sqlite3.connect("cyberscan.db")
 
     conn.execute(
-        '''INSERT INTO scans 
-           (scan_time, targets, total_hosts, total_ports, max_risk, avg_risk, results_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?)''',
+        "INSERT INTO scans (scan_time, total_hosts, total_ports, max_risk) VALUES (?, ?, ?, ?)",
         (
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            ', '.join(targets) if targets else '',
-            int(df['ip'].nunique()),
+            str(df.shape[0]),
+            df["ip"].nunique(),
             len(df),
-            float(df['risk_score'].max()),
-            float(df['risk_score'].mean()),
-            df.to_json(orient='records')
+            float(df["risk_score"].max())
         )
     )
 
     conn.commit()
     conn.close()
 
-
 def load_history():
-    conn = sqlite3.connect(DB_FILE)
-
-    df = pd.read_sql_query(
-        '''SELECT id, scan_time, targets, total_hosts, total_ports, max_risk, avg_risk
-           FROM scans ORDER BY id DESC''',
-        conn
-    )
-
+    conn = sqlite3.connect("cyberscan.db")
+    data = conn.execute("SELECT * FROM scans").fetchall()
     conn.close()
-    return df
-
-
-def load_scan_by_id(scan_id):
-    conn = sqlite3.connect(DB_FILE)
-
-    row = conn.execute(
-        'SELECT results_json FROM scans WHERE id = ?',
-        (scan_id,)
-    ).fetchone()
-
-    conn.close()
-
-    if row:
-        return pd.read_json(row[0])
-    return pd.DataFrame()
-
-
-# auto-create DB
-init_db()
+    return data

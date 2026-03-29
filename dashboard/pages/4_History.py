@@ -1,20 +1,20 @@
 import streamlit as st
+import pandas as pd
 import os, sys
 
-# 🔥 FIX PATH
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-
-from modules.database import load_history
+# PATH FIX
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 st.title("📜 Scan History")
 
-try:
-    df = load_history()
+# ── GET HISTORY ─────────────────────
+history = st.session_state.get("history", [])
 
-    if df.empty:
-        st.info("No scan history available")
-    else:
-        st.dataframe(df, use_container_width=True)
+# ── FIX: convert list → DataFrame ───
+history_df = pd.DataFrame(history)
 
-except Exception as e:
-    st.error(f"Error loading history: {e}")
+# ── DISPLAY ─────────────────────────
+if history_df.empty:
+    st.info("No scan history yet")
+else:
+    st.dataframe(history_df, use_container_width=True)

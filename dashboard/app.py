@@ -3,9 +3,8 @@ import pandas as pd
 import os, sys, random, time
 from datetime import datetime
 
+# ── PATH FIX ─────────────────────────────
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from modules.emailer import generate_pdf_report, send_alert_email
 
 # SAFE IMPORTS
 try:
@@ -25,22 +24,17 @@ except:
 
 st.set_page_config(page_title="CyberScan Pro", layout="wide")
 
-# ── DARK HACKER UI ─────────────────────
+# ── STYLE ─────────────────────────────
 st.markdown("""
 <style>
 body {background-color:#0d1117; color:#00ffcc;}
 .big-title {font-size:45px; color:#00ffcc; font-weight:bold;}
-.sidebar .sidebar-content {background-color:#020617;}
-.stButton>button {
-    background-color:#00ffcc;
-    color:black;
-    font-weight:bold;
-}
+.stButton>button {background:#00ffcc; color:black;}
 </style>
 """, unsafe_allow_html=True)
 
-# ── SIMPLE LOGIN STORAGE ─────────────────
-USERS = {"admin":"admin123"}
+# ── LOGIN ─────────────────────────────
+USERS = {"admin": "admin123"}
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -54,7 +48,6 @@ def login():
         if USERS.get(user) == pwd:
             st.session_state.logged_in = True
             st.session_state.user = user
-            st.success("Login successful")
             st.rerun()
         else:
             st.error("Invalid credentials")
@@ -63,27 +56,52 @@ if not st.session_state.logged_in:
     login()
     st.stop()
 
+# ── SESSION STORAGE ─────────────────────
+defaults = {
+    "vt_key": "",
+    "sender": "",
+    "app_pass": "",
+    "receiver": "",
+    "targets": "scanme.nmap.org",
+    "df": None,
+    "history": []
+}
+
+for k,v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
 # ── SIDEBAR ─────────────────────────────
 with st.sidebar:
     st.title("🛡️ CyberScan")
     st.success(f"Logged in as {st.session_state.user}")
-    st.divider()
 
-    vt_key = st.text_input("🔑 VirusTotal API Key", type="password")
+    vt_key = st.text_input("🔑 VirusTotal API Key", type="password", value=st.session_state.vt_key)
+    sender = st.text_input("📧 Sender Email", value=st.session_state.sender)
+    password = st.text_input("🔐 App Password", type="password", value=st.session_state.app_pass)
+    receiver = st.text_input("📥 Receiver Email", value=st.session_state.receiver)
 
-    sender = st.text_input("📧 Sender Email")
-    password = st.text_input("App Password", type="password")
-    receiver = st.text_input("Receiver Email")
+    # SAVE
+    st.session_state.vt_key = vt_key
+    st.session_state.sender = sender
+    st.session_state.app_pass = password
+    st.session_state.receiver = receiver
 
 # ── HEADER ─────────────────────────────
 st.markdown("<div class='big-title'>🛡️ CyberScan Pro</div>", unsafe_allow_html=True)
 
-targets_input = st.text_input("Targets (comma separated)", "scanme.nmap.org")
+# ── TARGET INPUT ───────────────────────
+targets_input = st.text_input(
+    "Targets (comma separated)",
+    value=st.session_state.targets
+)
+st.session_state.targets = targets_input
+
 targets = [t.strip() for t in targets_input.split(",") if t.strip()]
 
 mode = st.radio("Mode", ["⚡ Fast Demo", "🌐 Real Scan"])
 
-# ── DEMO ─────────────────────────────
+# ── DEMO DATA ─────────────────────────
 def demo():
     ips = ["192.168.1.1","10.0.0.1","8.8.8.8"]
     services = ["http","ssh","ftp","mysql","rdp"]
@@ -107,15 +125,8 @@ def animation():
     txt = st.empty()
     for i in range(100):
         bar.progress(i+1)
-        txt.text(random.choice(["Scanning...","Injecting packets...","Analyzing..."]))
+        txt.text(random.choice(["Scanning...","Analyzing...","Detecting threats..."]))
         time.sleep(0.01)
-
-# ── SESSION ─────────────────────────
-if "df" not in st.session_state:
-    st.session_state.df = None
-
-if "history" not in st.session_state:
-    st.session_state.history = []
 
 # ── RUN SCAN ─────────────────────────
 if st.button("🚀 Run Scan"):
@@ -137,7 +148,6 @@ if st.button("🚀 Run Scan"):
             else:
                 df_raw = pd.DataFrame(rows)
 
-                # ── VT INTEGRATION ─────────
                 vt_data = {}
                 if vt_key and check_virustotal:
                     for ip in df_raw["ip"].unique():
@@ -149,17 +159,19 @@ if st.button("🚀 Run Scan"):
             df = demo()
 
     st.session_state.df = df
+
+    # SAVE HISTORY
     st.session_state.history.append({
         "time": datetime.now().strftime("%H:%M:%S"),
         "hosts": df["ip"].nunique(),
         "ports": len(df)
     })
 
-    st.success("Scan Complete")
+    st.success("✅ Scan Completed")
 
-    # ── EMAIL SEND ─────────────────────
-    if sender and password and receiver:
-        sent = send_alert_email(
+    # EMAIL
+    if sender and password and receiver and send_alert_email:
+        result = send_alert_email(
             sender,
             password,
             receiver,
@@ -167,12 +179,10 @@ if st.button("🚀 Run Scan"):
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
 
-        if sent == True:
-            st.success("📧 Email sent successfully")
-        elif sent == False:
-            st.info("No critical/high alerts to send")
+        if result is True:
+            st.success("📧 Email Sent")
         else:
-            st.error(f"❌ Email failed: {sent}")
+            st.error(f"Email Error: {result}")
 
 # ── DISPLAY ─────────────────────────
 df = st.session_state.df
@@ -198,10 +208,9 @@ if df is not None:
     # CSV
     st.download_button("📥 Download CSV", df.to_csv(index=False), "scan.csv")
 
-    # ── PDF ─────────────────────
+    # PDF
     st.subheader("📄 Report")
-
-    if st.button("Generate PDF Report"):
+    if st.button("Generate PDF"):
         file = f"report_{datetime.now().strftime('%H%M%S')}.pdf"
 
         if generate_pdf_report:
@@ -212,9 +221,15 @@ if df is not None:
         else:
             st.error("PDF module missing")
 
-    # ── HISTORY ─────────────────────
+    # HISTORY
     st.subheader("📜 Scan History")
-    st.table(pd.DataFrame(st.session_state.history))
+
+    history_df = pd.DataFrame(st.session_state.history)
+
+    if history_df.empty:
+        st.info("No scan history yet")
+    else:
+        st.dataframe(history_df, use_container_width=True)
 
 else:
-    st.info("Enter target and click Run Scan")
+    st.info("👉 Enter target and click Run Scan")
