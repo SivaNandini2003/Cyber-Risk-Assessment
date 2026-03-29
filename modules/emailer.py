@@ -51,7 +51,7 @@ def generate_pdf_report(df: pd.DataFrame, scan_time: str, output_path: str) -> s
 
 
 # ─────────────────────────────────────────────
-# 📧 EMAIL SENDER (FIXED)
+# 📧 EMAIL SENDER 
 # ─────────────────────────────────────────────
 def send_alert_email(sender, password, receiver, df, scan_time):
     """
